@@ -2,7 +2,7 @@
 
 NumberSnap 是一个仅在本机运行的 Windows 数字表格截图 OCR 工具。按下
 `Ctrl + Shift + X`，框选数字区域后，程序会恢复行列并将 TSV 写入剪贴板，
-可直接粘贴到 Excel、WPS 或 Google Sheets。
+可直接粘贴到 Excel、WPS 或 Google Sheets。仅识别数字这一项特别适用于工作中报计划。
 
 ## 功能
 
