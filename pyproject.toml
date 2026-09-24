@@ -1,0 +1,17 @@
+[project]
+name = "numbersnap"
+version = "0.1.4"
+description = "Local Windows screenshot-to-TSV OCR utility"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

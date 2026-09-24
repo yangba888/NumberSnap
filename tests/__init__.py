@@ -1,0 +1,2 @@
+"""NumberSnap tests."""
+
