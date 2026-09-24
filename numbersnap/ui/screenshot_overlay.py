@@ -55,6 +55,9 @@ class ScreenshotOverlay(QWidget):
             painter.drawRect(selection.adjusted(0, 0, -1, -1))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.RightButton:
+            self._cancel()
+            return
         if event.button() == Qt.LeftButton:
             self.origin = event.position().toPoint()
             self.cursor = self.origin
@@ -81,11 +84,13 @@ class ScreenshotOverlay(QWidget):
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key_Escape:
-            self.hide()
-            self.cancelled.emit()
-            self.deleteLater()
+            self._cancel()
             return
         super().keyPressEvent(event)
+
+    def _cancel(self) -> None:
+        self.hide()
+        self.cancelled.emit()
 
     def release_snapshot(self) -> None:
         """Drop full-screen pixmaps as soon as the overlay is no longer visible."""

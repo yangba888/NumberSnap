@@ -11,7 +11,7 @@ from numbersnap.config.settings import Settings
 from numbersnap.core.autostart import is_autostart_enabled, set_autostart
 from numbersnap.core.capture import DesktopSnapshot, capture_virtual_desktop
 from numbersnap.core.clipboard import clear_clipboard, copy_text
-from numbersnap.core.hotkey import GlobalHotkey
+from numbersnap.core.hotkey import TOGGLE_WINDOW_HOTKEY_ID, GlobalHotkey
 from numbersnap.core.layout_detector import LayoutResult
 from numbersnap.ui.main_window import MainWindow
 from numbersnap.ui.notification import NotificationService
@@ -36,6 +36,10 @@ class ApplicationController(QObject):
         self.tray = TrayIcon()
         self.notifications = NotificationService(self.tray)
         self.hotkey = GlobalHotkey(settings.hotkey)
+        self.toggle_hotkey = GlobalHotkey(
+            settings.toggle_hotkey,
+            hotkey_id=TOGGLE_WINDOW_HOTKEY_ID,
+        )
         self.overlay: ScreenshotOverlay | None = None
         self.snapshot: DesktopSnapshot | None = None
         self.last_text = ""
@@ -47,6 +51,7 @@ class ApplicationController(QObject):
         self.window.copy_requested.connect(self.copy_again)
         self.window.clear_requested.connect(self.clear_result)
         self.window.hotkey_changed.connect(self.change_hotkey)
+        self.window.toggle_hotkey_changed.connect(self.change_toggle_hotkey)
         self.window.autostart_changed.connect(self.change_autostart)
         self.window.quit_requested.connect(self.quit)
         self.tray.capture_requested.connect(self.start_capture)
@@ -55,6 +60,10 @@ class ApplicationController(QObject):
         self.tray.quit_requested.connect(self.quit)
         self.hotkey.activated.connect(self.start_capture)
         self.hotkey.failed.connect(lambda message: self.notifications.show(message, error=True))
+        self.toggle_hotkey.activated.connect(self.toggle_window)
+        self.toggle_hotkey.failed.connect(
+            lambda message: self.notifications.show(message, error=True)
+        )
 
         self.app.setWindowIcon(create_app_icon())
         self.app.aboutToQuit.connect(self._shutdown)
@@ -64,12 +73,20 @@ class ApplicationController(QObject):
         if show_window:
             self.window.show()
         self.hotkey.start()
+        self.toggle_hotkey.start()
 
     @Slot()
     def show_window(self) -> None:
         self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
+
+    @Slot()
+    def toggle_window(self) -> None:
+        if self.window.isVisible():
+            self.window.hide()
+        else:
+            self.show_window()
 
     @Slot()
     def start_capture(self) -> None:
@@ -169,6 +186,27 @@ class ApplicationController(QObject):
         self.window.set_hotkey(sequence)
         self.notifications.show(f"快捷键已设置为 {sequence}")
 
+    @Slot(str)
+    def change_toggle_hotkey(self, sequence: str) -> None:
+        previous = self.settings.toggle_hotkey
+        if not sequence:
+            self.window.set_toggle_hotkey(previous)
+            self.notifications.show("显示/隐藏快捷键不能为空", error=True)
+            return
+        try:
+            changed = self.toggle_hotkey.set_sequence(sequence)
+        except ValueError as exc:
+            self.window.set_toggle_hotkey(previous)
+            self.notifications.show(str(exc), error=True)
+            return
+        if not changed:
+            self.window.set_toggle_hotkey(previous)
+            return
+        self.settings.toggle_hotkey = sequence
+        self.settings.save()
+        self.window.set_toggle_hotkey(sequence)
+        self.notifications.show(f"显示/隐藏快捷键已设置为 {sequence}")
+
     @Slot(bool)
     def change_autostart(self, enabled: bool) -> None:
         try:
@@ -189,6 +227,7 @@ class ApplicationController(QObject):
     @Slot()
     def _shutdown(self) -> None:
         self.hotkey.stop()
+        self.toggle_hotkey.stop()
         if self.worker_thread is None:
             return
         self.worker_thread.quit()

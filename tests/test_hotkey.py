@@ -1,10 +1,12 @@
 import pytest
 
 from numbersnap.core.hotkey import (
+    CAPTURE_HOTKEY_ID,
     MOD_CONTROL,
     MOD_NOREPEAT,
     MOD_SHIFT,
     MOD_WIN,
+    TOGGLE_WINDOW_HOTKEY_ID,
     parse_hotkey,
 )
 
@@ -13,6 +15,7 @@ def test_parses_default_hotkey() -> None:
     modifiers, key = parse_hotkey("Ctrl+Shift+X")
     assert modifiers == MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT
     assert key == ord("X")
+    assert CAPTURE_HOTKEY_ID != TOGGLE_WINDOW_HOTKEY_ID
 
 
 def test_parses_function_and_windows_keys() -> None:

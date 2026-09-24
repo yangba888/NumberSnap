@@ -14,7 +14,8 @@ MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
 MOD_WIN = 0x0008
 MOD_NOREPEAT = 0x4000
-HOTKEY_ID = 0x4E53
+CAPTURE_HOTKEY_ID = 0x4E53
+TOGGLE_WINDOW_HOTKEY_ID = 0x4E54
 
 _MODIFIERS = {
     "ctrl": MOD_CONTROL,
@@ -72,7 +73,7 @@ class _HotkeyEventFilter(QAbstractNativeEventFilter):
             native_message = wintypes.MSG.from_address(int(message))
             if (
                 native_message.message == WM_HOTKEY
-                and native_message.wParam == HOTKEY_ID
+                and native_message.wParam == self.owner.hotkey_id
             ):
                 self.owner.activated.emit()
         return False, 0
@@ -82,9 +83,14 @@ class GlobalHotkey(QObject):
     activated = Signal()
     failed = Signal(str)
 
-    def __init__(self, sequence: str = "Ctrl+Shift+X") -> None:
+    def __init__(
+        self,
+        sequence: str = "Ctrl+Shift+X",
+        hotkey_id: int = CAPTURE_HOTKEY_ID,
+    ) -> None:
         super().__init__()
         self.sequence = sequence
+        self.hotkey_id = hotkey_id
         self._event_filter: _HotkeyEventFilter | None = None
         self._registered = False
 
@@ -104,7 +110,7 @@ class GlobalHotkey(QObject):
             self.failed.emit("Qt 事件循环尚未启动，无法注册全局快捷键")
             return False
         if not ctypes.windll.user32.RegisterHotKey(
-            None, HOTKEY_ID, modifiers, virtual_key
+            None, self.hotkey_id, modifiers, virtual_key
         ):
             self.failed.emit(f"无法注册 {self.sequence}；它可能已被其他程序占用")
             return False
@@ -116,7 +122,7 @@ class GlobalHotkey(QObject):
 
     def stop(self) -> None:
         if sys.platform == "win32" and self._registered:
-            ctypes.windll.user32.UnregisterHotKey(None, HOTKEY_ID)
+            ctypes.windll.user32.UnregisterHotKey(None, self.hotkey_id)
         app = QCoreApplication.instance()
         if app is not None and self._event_filter is not None:
             app.removeNativeEventFilter(self._event_filter)

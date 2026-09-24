@@ -5,9 +5,10 @@ import sys
 from ctypes import wintypes
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
@@ -27,6 +28,7 @@ class MainWindow(QMainWindow):
     copy_requested = Signal()
     clear_requested = Signal()
     hotkey_changed = Signal(str)
+    toggle_hotkey_changed = Signal(str)
     autostart_changed = Signal(bool)
     quit_requested = Signal()
 
@@ -34,7 +36,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle("NumberSnap")
-        self.setMinimumSize(520, 390)
+        self.setMinimumSize(520, 440)
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self._topmost_applied = False
 
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
         outer_layout.addWidget(self.title_bar)
 
         content = QWidget(root)
+        content.setObjectName("content")
         layout = QVBoxLayout(content)
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(12)
@@ -58,12 +61,32 @@ class MainWindow(QMainWindow):
         layout.addWidget(title)
 
         shortcut_row = QHBoxLayout()
-        shortcut_row.addWidget(QLabel("快捷键："))
+        shortcut_row.addWidget(QLabel("截图快捷键："))
         self.hotkey_edit = QKeySequenceEdit(QKeySequence(settings.hotkey))
         self.hotkey_edit.setMaximumSequenceLength(1)
         shortcut_row.addWidget(self.hotkey_edit)
         shortcut_row.addStretch(1)
         layout.addLayout(shortcut_row)
+
+        toggle_shortcut_row = QHBoxLayout()
+        toggle_shortcut_row.addWidget(QLabel("显示/隐藏快捷键："))
+        self.toggle_hotkey_edit = QKeySequenceEdit(QKeySequence(settings.toggle_hotkey))
+        self.toggle_hotkey_edit.setMaximumSequenceLength(1)
+        toggle_shortcut_row.addWidget(self.toggle_hotkey_edit)
+        toggle_shortcut_row.addStretch(1)
+        layout.addLayout(toggle_shortcut_row)
+
+        theme_row = QHBoxLayout()
+        theme_row.addWidget(QLabel("界面主题："))
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("跟随系统", "system")
+        self.theme_combo.addItem("浅色", "light")
+        self.theme_combo.addItem("深色", "dark")
+        theme_index = max(0, self.theme_combo.findData(settings.theme))
+        self.theme_combo.setCurrentIndex(theme_index)
+        theme_row.addWidget(self.theme_combo)
+        theme_row.addStretch(1)
+        layout.addLayout(theme_row)
 
         self.numbers_only = QCheckBox("Numbers Only")
         self.auto_copy = QCheckBox("Auto Copy")
@@ -107,8 +130,12 @@ class MainWindow(QMainWindow):
         self.capture_button.clicked.connect(self.capture_requested.emit)
         self.copy_button.clicked.connect(self.copy_requested.emit)
         self.clear_button.clicked.connect(self.clear_requested.emit)
-        self.close_button.clicked.connect(self.close)
+        self.close_button.clicked.connect(self.quit_requested.emit)
         self.hotkey_edit.editingFinished.connect(self._emit_hotkey)
+        self.toggle_hotkey_edit.editingFinished.connect(self._emit_toggle_hotkey)
+        self.theme_combo.currentIndexChanged.connect(self._change_theme)
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._system_theme_changed)
+        self._apply_theme()
 
     def _connect_settings(self) -> None:
         self.numbers_only.toggled.connect(self._save_settings)
@@ -158,6 +185,9 @@ class MainWindow(QMainWindow):
     def set_hotkey(self, sequence: str) -> None:
         self.hotkey_edit.setKeySequence(QKeySequence(sequence))
 
+    def set_toggle_hotkey(self, sequence: str) -> None:
+        self.toggle_hotkey_edit.setKeySequence(QKeySequence(sequence))
+
     def set_autostart_checked(self, enabled: bool) -> None:
         self.start_with_windows.blockSignals(True)
         self.start_with_windows.setChecked(enabled)
@@ -166,6 +196,47 @@ class MainWindow(QMainWindow):
     def _emit_hotkey(self) -> None:
         sequence = self.hotkey_edit.keySequence().toString(QKeySequence.PortableText)
         self.hotkey_changed.emit(sequence)
+
+    def _emit_toggle_hotkey(self) -> None:
+        sequence = self.toggle_hotkey_edit.keySequence().toString(QKeySequence.PortableText)
+        self.toggle_hotkey_changed.emit(sequence)
+
+    def _change_theme(self) -> None:
+        self.settings.theme = str(self.theme_combo.currentData())
+        self.settings.save()
+        self._apply_theme()
+
+    def _system_theme_changed(self) -> None:
+        if self.settings.theme == "system":
+            self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        system_dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+        dark = self.settings.theme == "dark" or (
+            self.settings.theme == "system" and system_dark
+        )
+        foreground = "#f2f2f2" if dark else "#202020"
+        background = "#202020" if dark else "#f7f7f7"
+        field = "#2b2b2b" if dark else "#ffffff"
+        border = "#505050" if dark else "#b8b8b8"
+        hover = "#353535" if dark else "#ededed"
+        self.setStyleSheet(
+            f"""
+            QMainWindow, QWidget#content {{ background: {background}; color: {foreground}; }}
+            QLabel, QCheckBox {{ color: {foreground}; }}
+            QPlainTextEdit, QKeySequenceEdit, QComboBox {{
+                color: {foreground}; background: {field}; border: 1px solid {border};
+                border-radius: 3px; padding: 4px;
+            }}
+            QPushButton {{
+                color: {foreground}; background: {field}; border: 1px solid {border};
+                border-radius: 3px; padding: 5px 12px;
+            }}
+            QPushButton:hover {{ background: {hover}; }}
+            QPushButton:disabled {{ color: #888888; }}
+            """
+        )
+        self.title_bar.set_dark_mode(dark)
 
     def showEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().showEvent(event)
@@ -178,5 +249,5 @@ class MainWindow(QMainWindow):
             self.title_bar.sync_maximized_state()
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
-        event.accept()
-        self.quit_requested.emit()
+        event.ignore()
+        self.hide()

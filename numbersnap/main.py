@@ -28,7 +28,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NumberSnap")
-    app.setApplicationVersion("0.1.4")
+    app.setApplicationVersion("0.1.5")
     app.setQuitOnLastWindowClosed(True)
 
     if "--ocr-smoke-test" in sys.argv:

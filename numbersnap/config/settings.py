@@ -13,11 +13,13 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(slots=True)
 class Settings:
     hotkey: str = "Ctrl+Shift+X"
+    toggle_hotkey: str = "Ctrl+Shift+Z"
     numbers_only: bool = True
     auto_copy: bool = True
     preserve_layout: bool = True
     always_on_top: bool = False
     start_with_windows: bool = False
+    theme: str = "system"
     debug: bool = False
 
     @staticmethod

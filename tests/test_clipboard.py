@@ -1,14 +1,16 @@
-from numbersnap.core.clipboard import tsv_to_html
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
+
+from numbersnap.core.clipboard import clear_clipboard, copy_text
 
 
-def test_html_clipboard_keeps_cells_as_left_aligned_text() -> None:
-    html = tsv_to_html("00123\t456\n7\t")
-    assert html.count("<tr>") == 2
-    assert html.count("<td ") == 4
-    assert "mso-number-format:'\\@'" in html
-    assert "text-align:left" in html
-    assert ">00123<" in html
-
-
-def test_html_clipboard_escapes_cell_content() -> None:
-    assert "&lt;" in tsv_to_html("<")
+def test_clipboard_only_exposes_plain_text() -> None:
+    app = QApplication.instance() or QApplication([])
+    copy_text("00123\t456\n7\t")
+    mime = QGuiApplication.clipboard().mimeData()
+    assert mime.text() == "00123\t456\n7\t"
+    assert mime.hasFormat("text/plain")
+    assert not mime.hasHtml()
+    assert not mime.hasFormat("text/rtf")
+    clear_clipboard()
+    app.processEvents()
