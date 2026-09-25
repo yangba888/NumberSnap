@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from numbersnap.config.settings import Settings
@@ -18,6 +19,7 @@ def test_main_window_has_pin_autostart_and_close_controls() -> None:
     assert window.toggle_hotkey_save_button.text() == "保存"
     assert window.theme_combo.count() == 3
     assert window.close_button.text() == "关闭"
+    assert window.testAttribute(Qt.WA_TranslucentBackground)
     window.deleteLater()
     app.processEvents()
 

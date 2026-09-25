@@ -38,6 +38,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("NumberSnap")
         self.setMinimumSize(520, 440)
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+        # Keep the body opaque while allowing the custom title bar to use
+        # per-pixel alpha. This is lighter and more reliable than a live blur.
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self._topmost_applied = False
 
         root = QWidget(self)
@@ -226,7 +229,8 @@ class MainWindow(QMainWindow):
         hover = "#353535" if dark else "#ededed"
         self.setStyleSheet(
             f"""
-            QMainWindow, QWidget#content {{ background: {background}; color: {foreground}; }}
+            QMainWindow {{ background: transparent; }}
+            QWidget#content {{ background: {background}; color: {foreground}; }}
             QLabel, QCheckBox {{ color: {foreground}; }}
             QPlainTextEdit, QKeySequenceEdit, QComboBox {{
                 color: {foreground}; background: {field}; border: 1px solid {border};

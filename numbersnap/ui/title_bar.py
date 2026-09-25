@@ -39,6 +39,7 @@ class TitleBar(QWidget):
         super().__init__(parent)
         self.dark_mode = True
         self.setObjectName("titleBar")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(38)
 
         layout = QHBoxLayout(self)
