@@ -1,19 +1,26 @@
 import os
-import sys
+import uuid
 
-import pytest
+from PySide6.QtCore import QCoreApplication
 
 from numbersnap.core.single_instance import SingleInstanceGuard
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows named mutex test")
-def test_rejects_second_process_instance() -> None:
-    mutex_name = f"Local\\NumberSnap.Test.{os.getpid()}"
-    first = SingleInstanceGuard(mutex_name)
-    second = SingleInstanceGuard(mutex_name)
+def test_second_instance_activates_first_instance() -> None:
+    app = QCoreApplication.instance() or QCoreApplication([])
+    server_name = f"NumberSnap.Test.{os.getpid()}.{uuid.uuid4().hex}"
+    first = SingleInstanceGuard(server_name)
+    second = SingleInstanceGuard(server_name)
+    activations: list[bool] = []
+    first.activation_requested.connect(lambda: activations.append(True))
     try:
         assert first.acquire()
         assert not second.acquire()
+        for _ in range(10):
+            app.processEvents()
+            if activations:
+                break
+        assert activations == [True]
     finally:
         first.release()
         second.release()

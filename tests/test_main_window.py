@@ -14,6 +14,8 @@ def test_main_window_has_pin_autostart_and_close_controls() -> None:
     assert window.title_bar.pin_button.toolTip() == "窗口置顶"
     assert window.start_with_windows.text() == "开机自启"
     assert window.toggle_hotkey_edit.keySequence().toString() == "Ctrl+Shift+Z"
+    assert window.hotkey_save_button.text() == "保存"
+    assert window.toggle_hotkey_save_button.text() == "保存"
     assert window.theme_combo.count() == 3
     assert window.close_button.text() == "关闭"
     window.deleteLater()
@@ -44,5 +46,18 @@ def test_title_bar_icons_follow_selected_theme(monkeypatch) -> None:
     assert not window.title_bar.dark_mode
     window.theme_combo.setCurrentIndex(window.theme_combo.findData("dark"))
     assert window.title_bar.dark_mode
+    window.deleteLater()
+    app.processEvents()
+
+
+def test_shortcut_change_is_emitted_only_when_saved() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(Settings())
+    changes: list[str] = []
+    window.hotkey_changed.connect(changes.append)
+    window.hotkey_edit.setKeySequence("Ctrl+Alt+7")
+    assert changes == []
+    window.hotkey_save_button.click()
+    assert changes == ["Ctrl+Alt+7"]
     window.deleteLater()
     app.processEvents()

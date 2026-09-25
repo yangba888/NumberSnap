@@ -34,9 +34,9 @@ class TrayIcon(QSystemTrayIcon):
         heading = QAction("NumberSnap", menu)
         heading.setEnabled(False)
         capture = menu.addAction("截图识别")
-        settings = menu.addAction("设置")
+        settings = menu.addAction("显示主窗口")
         menu.addSeparator()
-        quit_action = menu.addAction("退出")
+        quit_action = menu.addAction("彻底退出")
         menu.insertAction(capture, heading)
         self.setContextMenu(menu)
 
@@ -48,4 +48,3 @@ class TrayIcon(QSystemTrayIcon):
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.DoubleClick:
             self.show_requested.emit()
-

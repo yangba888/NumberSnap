@@ -8,7 +8,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
 from numbersnap.config.settings import Settings
-from numbersnap.core.autostart import is_autostart_enabled, set_autostart
+from numbersnap.core.autostart import is_autostart_enabled, reconcile_autostart, set_autostart
 from numbersnap.core.capture import DesktopSnapshot, capture_virtual_desktop
 from numbersnap.core.clipboard import clear_clipboard, copy_text
 from numbersnap.core.hotkey import TOGGLE_WINDOW_HOTKEY_ID, GlobalHotkey
@@ -31,8 +31,14 @@ class ApplicationController(QObject):
         super().__init__()
         self.app = app
         self.settings = settings
-        self.settings.start_with_windows = is_autostart_enabled()
+        self._startup_warning: str | None = None
+        try:
+            autostart_enabled = reconcile_autostart(settings.start_with_windows)
+        except OSError as exc:
+            autostart_enabled = False
+            self._startup_warning = f"无法读取开机自启状态：{exc}"
         self.window = MainWindow(settings)
+        self.window.set_autostart_checked(autostart_enabled)
         self.tray = TrayIcon()
         self.notifications = NotificationService(self.tray)
         self.hotkey = GlobalHotkey(settings.hotkey)
@@ -74,9 +80,17 @@ class ApplicationController(QObject):
             self.window.show()
         self.hotkey.start()
         self.toggle_hotkey.start()
+        if self.settings.load_warning:
+            self.notifications.show(self.settings.load_warning, error=True)
+        if self._startup_warning:
+            self.notifications.show(self._startup_warning, error=True)
 
     @Slot()
     def show_window(self) -> None:
+        try:
+            self.window.set_autostart_checked(is_autostart_enabled())
+        except OSError as exc:
+            self.notifications.show(f"无法读取开机自启状态：{exc}", error=True)
         self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
@@ -182,7 +196,14 @@ class ApplicationController(QObject):
             self.window.set_hotkey(previous)
             return
         self.settings.hotkey = sequence
-        self.settings.save()
+        try:
+            self.settings.save()
+        except OSError as exc:
+            self.settings.hotkey = previous
+            self.hotkey.set_sequence(previous)
+            self.window.set_hotkey(previous)
+            self.notifications.show(f"快捷键保存失败：{exc}", error=True)
+            return
         self.window.set_hotkey(sequence)
         self.notifications.show(f"快捷键已设置为 {sequence}")
 
@@ -203,20 +224,39 @@ class ApplicationController(QObject):
             self.window.set_toggle_hotkey(previous)
             return
         self.settings.toggle_hotkey = sequence
-        self.settings.save()
+        try:
+            self.settings.save()
+        except OSError as exc:
+            self.settings.toggle_hotkey = previous
+            self.toggle_hotkey.set_sequence(previous)
+            self.window.set_toggle_hotkey(previous)
+            self.notifications.show(f"显示/隐藏快捷键保存失败：{exc}", error=True)
+            return
         self.window.set_toggle_hotkey(sequence)
         self.notifications.show(f"显示/隐藏快捷键已设置为 {sequence}")
 
     @Slot(bool)
     def change_autostart(self, enabled: bool) -> None:
+        previous_preference = self.settings.start_with_windows
+        try:
+            previous_enabled = is_autostart_enabled()
+        except OSError:
+            previous_enabled = False
         try:
             set_autostart(enabled)
+            if is_autostart_enabled() is not enabled:
+                raise OSError("启动项状态与设置不一致")
+            self.settings.start_with_windows = enabled
+            self.settings.save()
         except OSError as exc:
-            self.window.set_autostart_checked(not enabled)
+            try:
+                set_autostart(previous_enabled)
+            except OSError:
+                LOGGER.exception("Unable to restore the previous autostart setting")
+            self.settings.start_with_windows = previous_preference
+            self.window.set_autostart_checked(previous_enabled)
             self.notifications.show(f"开机自启设置失败：{exc}", error=True)
             return
-        self.settings.start_with_windows = enabled
-        self.settings.save()
         message = "已开启开机自启" if enabled else "已关闭开机自启"
         self.notifications.show(message)
 

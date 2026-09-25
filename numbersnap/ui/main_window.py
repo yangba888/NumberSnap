@@ -65,6 +65,8 @@ class MainWindow(QMainWindow):
         self.hotkey_edit = QKeySequenceEdit(QKeySequence(settings.hotkey))
         self.hotkey_edit.setMaximumSequenceLength(1)
         shortcut_row.addWidget(self.hotkey_edit)
+        self.hotkey_save_button = QPushButton("保存")
+        shortcut_row.addWidget(self.hotkey_save_button)
         shortcut_row.addStretch(1)
         layout.addLayout(shortcut_row)
 
@@ -73,6 +75,8 @@ class MainWindow(QMainWindow):
         self.toggle_hotkey_edit = QKeySequenceEdit(QKeySequence(settings.toggle_hotkey))
         self.toggle_hotkey_edit.setMaximumSequenceLength(1)
         toggle_shortcut_row.addWidget(self.toggle_hotkey_edit)
+        self.toggle_hotkey_save_button = QPushButton("保存")
+        toggle_shortcut_row.addWidget(self.toggle_hotkey_save_button)
         toggle_shortcut_row.addStretch(1)
         layout.addLayout(toggle_shortcut_row)
 
@@ -131,8 +135,8 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.copy_requested.emit)
         self.clear_button.clicked.connect(self.clear_requested.emit)
         self.close_button.clicked.connect(self.quit_requested.emit)
-        self.hotkey_edit.editingFinished.connect(self._emit_hotkey)
-        self.toggle_hotkey_edit.editingFinished.connect(self._emit_toggle_hotkey)
+        self.hotkey_save_button.clicked.connect(self._emit_hotkey)
+        self.toggle_hotkey_save_button.clicked.connect(self._emit_toggle_hotkey)
         self.theme_combo.currentIndexChanged.connect(self._change_theme)
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._system_theme_changed)
         self._apply_theme()

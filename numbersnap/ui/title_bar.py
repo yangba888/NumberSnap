@@ -81,12 +81,22 @@ class TitleBar(QWidget):
     def set_dark_mode(self, dark: bool) -> None:
         self.dark_mode = dark
         foreground = "#f5f5f5" if dark else "#202020"
-        background = "#202020" if dark else "#f3f3f3"
-        hover = "#383838" if dark else "#e5e5e5"
+        background = (
+            "qlineargradient(x1:0,y1:0,x2:0,y2:1, "
+            "stop:0 rgba(42,42,42,229), stop:1 rgba(28,28,28,220))"
+            if dark
+            else "qlineargradient(x1:0,y1:0,x2:0,y2:1, "
+            "stop:0 rgba(255,255,255,229), stop:1 rgba(239,239,239,220))"
+        )
+        divider = "rgba(255,255,255,35)" if dark else "rgba(0,0,0,28)"
+        hover = "rgba(255,255,255,24)" if dark else "rgba(0,0,0,18)"
         checked = "#3d5368" if dark else "#cfe6fa"
         self.setStyleSheet(
             f"""
-            QWidget#titleBar {{ background: {background}; }}
+            QWidget#titleBar {{
+                background: {background};
+                border-bottom: 1px solid {divider};
+            }}
             QLabel#titleBarText {{ color: {foreground}; font-weight: 600; }}
             QToolButton {{ border: 0; background: transparent; }}
             QToolButton:hover {{ background: {hover}; }}
