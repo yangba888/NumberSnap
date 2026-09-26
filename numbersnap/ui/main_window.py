@@ -5,16 +5,18 @@ import sys
 from ctypes import wintypes
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QGuiApplication, QKeySequence
+from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QTextCursor, QTextFormat
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QGridLayout,
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -96,23 +98,33 @@ class MainWindow(QMainWindow):
         layout.addLayout(theme_row)
 
         self.numbers_only = QCheckBox("Numbers Only")
+        self.auto_columns = QCheckBox("自动分列")
         self.auto_copy = QCheckBox("Auto Copy")
+        self.text_number_split = QCheckBox("文数分列")
         self.preserve_layout = QCheckBox("Preserve Rows & Columns")
         self.start_with_windows = QCheckBox("开机自启")
         self.numbers_only.setChecked(settings.numbers_only)
+        self.auto_columns.setChecked(settings.auto_columns)
         self.auto_copy.setChecked(settings.auto_copy)
+        self.text_number_split.setChecked(settings.text_number_split)
         self.preserve_layout.setChecked(settings.preserve_layout)
         self.start_with_windows.setChecked(settings.start_with_windows)
-        layout.addWidget(self.numbers_only)
-        layout.addWidget(self.auto_copy)
+        options_grid = QGridLayout()
+        options_grid.setColumnStretch(2, 1)
+        options_grid.addWidget(self.numbers_only, 0, 0)
+        options_grid.addWidget(self.auto_columns, 0, 1)
+        options_grid.addWidget(self.auto_copy, 1, 0)
+        options_grid.addWidget(self.text_number_split, 1, 1)
+        layout.addLayout(options_grid)
         layout.addWidget(self.preserve_layout)
         layout.addWidget(self.start_with_windows)
 
         layout.addWidget(QLabel("识别结果预览"))
         self.preview = QPlainTextEdit()
-        self.preview.setReadOnly(True)
+        self.preview.setReadOnly(False)
         self.preview.setLayoutDirection(Qt.LeftToRight)
         self.preview.setPlaceholderText("截图识别后的 TSV 将显示在这里")
+        self.preview.setToolTip("黄色行表示低置信度或未找到末尾数量，可直接修改")
         layout.addWidget(self.preview, 1)
 
         buttons = QHBoxLayout()
@@ -138,6 +150,7 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self.copy_requested.emit)
         self.clear_button.clicked.connect(self.clear_requested.emit)
         self.close_button.clicked.connect(self.quit_requested.emit)
+        self.preview.textChanged.connect(self._preview_edited)
         self.hotkey_save_button.clicked.connect(self._emit_hotkey)
         self.toggle_hotkey_save_button.clicked.connect(self._emit_toggle_hotkey)
         self.theme_combo.currentIndexChanged.connect(self._change_theme)
@@ -146,13 +159,19 @@ class MainWindow(QMainWindow):
 
     def _connect_settings(self) -> None:
         self.numbers_only.toggled.connect(self._save_settings)
+        self.numbers_only.toggled.connect(self.auto_columns.setEnabled)
+        self.auto_columns.toggled.connect(self._save_settings)
         self.auto_copy.toggled.connect(self._save_settings)
+        self.text_number_split.toggled.connect(self._save_settings)
         self.preserve_layout.toggled.connect(self._save_settings)
         self.start_with_windows.toggled.connect(self.autostart_changed)
+        self.auto_columns.setEnabled(self.numbers_only.isChecked())
 
     def _save_settings(self) -> None:
         self.settings.numbers_only = self.numbers_only.isChecked()
+        self.settings.auto_columns = self.auto_columns.isChecked()
         self.settings.auto_copy = self.auto_copy.isChecked()
+        self.settings.text_number_split = self.text_number_split.isChecked()
         self.settings.preserve_layout = self.preserve_layout.isChecked()
         self.settings.save()
 
@@ -184,10 +203,37 @@ class MainWindow(QMainWindow):
         self.capture_button.setEnabled(not busy)
         self.capture_button.setText("识别中…" if busy else "截图识别")
 
-    def set_result(self, text: str) -> None:
+    def set_result(
+        self,
+        text: str,
+        uncertain_rows: frozenset[int] = frozenset(),
+    ) -> None:
+        self.preview.blockSignals(True)
         self.preview.setPlainText(text)
+        self.preview.blockSignals(False)
+        selections: list[QTextEdit.ExtraSelection] = []
+        for row in uncertain_rows:
+            block = self.preview.document().findBlockByNumber(row)
+            if not block.isValid():
+                continue
+            selection = QTextEdit.ExtraSelection()
+            selection.cursor = QTextCursor(block)
+            selection.cursor.select(QTextCursor.LineUnderCursor)
+            selection.format.setBackground(QColor(255, 193, 7, 70))
+            selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+            selections.append(selection)
+        self.preview.setExtraSelections(selections)
         self.copy_button.setEnabled(bool(text))
         self.clear_button.setEnabled(bool(text))
+
+    def result_text(self) -> str:
+        return self.preview.toPlainText()
+
+    def _preview_edited(self) -> None:
+        self.preview.setExtraSelections([])
+        has_text = bool(self.preview.toPlainText())
+        self.copy_button.setEnabled(has_text)
+        self.clear_button.setEnabled(has_text)
 
     def set_hotkey(self, sequence: str) -> None:
         self.hotkey_edit.setKeySequence(QKeySequence(sequence))

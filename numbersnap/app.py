@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class ApplicationController(QObject):
-    recognize_requested = Signal(QImage, bool, bool)
+    recognize_requested = Signal(QImage, bool, bool, bool, bool)
 
     def __init__(self, app: QApplication, settings: Settings) -> None:
         super().__init__()
@@ -130,6 +130,8 @@ class ApplicationController(QObject):
             image,
             self.settings.numbers_only,
             self.settings.preserve_layout,
+            self.settings.auto_columns,
+            self.settings.text_number_split,
         )
 
     @Slot()
@@ -145,7 +147,7 @@ class ApplicationController(QObject):
         self._ocr_busy = False
         self.window.set_busy(False)
         self.last_text = text
-        self.window.set_result(text)
+        self.window.set_result(text, result.uncertain_rows)
         if not text:
             self.notifications.show("未识别到数字", error=True)
             return
@@ -153,10 +155,16 @@ class ApplicationController(QObject):
             copy_text(text)
         cell_count = sum(1 for row in result.cells for cell in row if cell)
         suffix = " · 已复制" if self.settings.auto_copy else ""
-        message = (
-            f"已识别 {cell_count} 个数字 · {result.row_count} 行 × "
-            f"{result.column_count} 列{suffix}"
-        )
+        if self.settings.text_number_split and not self.settings.numbers_only:
+            message = (
+                f"已识别 {result.row_count} 条商品 · {result.row_count} 行 × "
+                f"{result.column_count} 列{suffix}"
+            )
+        else:
+            message = (
+                f"已识别 {cell_count} 个数字 · {result.row_count} 行 × "
+                f"{result.column_count} 列{suffix}"
+            )
         LOGGER.info("OCR completed in %.3fs: %s", elapsed, message)
         self.notifications.show(message)
 
@@ -168,8 +176,10 @@ class ApplicationController(QObject):
 
     @Slot()
     def copy_again(self) -> None:
-        if self.last_text:
-            copy_text(self.last_text)
+        text = self.window.result_text()
+        if text:
+            self.last_text = text
+            copy_text(text)
             self.notifications.show("识别结果已重新复制")
 
     @Slot()

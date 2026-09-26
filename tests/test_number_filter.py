@@ -1,6 +1,6 @@
 import pytest
 
-from numbersnap.core.number_filter import extract_numbers, is_number
+from numbersnap.core.number_filter import extract_number_spans, extract_numbers, is_number
 
 
 @pytest.mark.parametrize(
@@ -35,3 +35,10 @@ def test_rejects_words_and_identifiers() -> None:
 
 def test_preserves_leading_zeroes() -> None:
     assert extract_numbers("00123") == ["00123"]
+
+
+def test_extract_number_spans_retains_positions() -> None:
+    assert extract_number_spans("金额123 456") == [
+        ("123", 2, 5),
+        ("456", 6, 9),
+    ]

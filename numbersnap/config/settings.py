@@ -17,7 +17,9 @@ class Settings:
     hotkey: str = "Ctrl+Shift+X"
     toggle_hotkey: str = "Ctrl+Shift+Z"
     numbers_only: bool = True
+    auto_columns: bool = True
     auto_copy: bool = True
+    text_number_split: bool = True
     preserve_layout: bool = True
     always_on_top: bool = False
     start_with_windows: bool = False
