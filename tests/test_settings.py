@@ -14,6 +14,8 @@ def test_missing_file_uses_defaults(monkeypatch, tmp_path) -> None:
     _use_path(monkeypatch, tmp_path / "settings.json")
     settings = Settings.load()
     assert settings.hotkey == "Ctrl+Shift+X"
+    assert settings.auto_columns
+    assert settings.text_number_split
     assert not settings.start_with_windows
     assert settings.load_warning is None
 
@@ -25,6 +27,20 @@ def test_shortcuts_survive_restart(monkeypatch, tmp_path) -> None:
     restarted = Settings.load()
     assert restarted.hotkey == "Ctrl+Alt+8"
     assert restarted.toggle_hotkey == "Ctrl+Alt+9"
+
+
+def test_auto_columns_setting_survives_restart(monkeypatch, tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    _use_path(monkeypatch, path)
+    Settings(auto_columns=False).save()
+    assert not Settings.load().auto_columns
+
+
+def test_text_number_split_setting_survives_restart(monkeypatch, tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    _use_path(monkeypatch, path)
+    Settings(text_number_split=False).save()
+    assert not Settings.load().text_number_split
 
 
 def test_corrupt_file_falls_back_and_warns(monkeypatch, tmp_path) -> None:

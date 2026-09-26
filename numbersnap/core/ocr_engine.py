@@ -9,7 +9,7 @@ from PySide6.QtGui import QImage
 
 from numbersnap.core.models import BoundingBox, OCRToken
 from numbersnap.core.normalization import normalize_numeric_context
-from numbersnap.core.number_filter import extract_numbers
+from numbersnap.core.number_filter import extract_number_spans
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,13 +53,17 @@ class OCREngine:
             if confidence < self.minimum_confidence:
                 continue
             if numbers_only:
-                values = extract_numbers(raw_text)
-                if not values:
+                matches = extract_number_spans(raw_text)
+                if not matches:
                     continue
-                # A detector normally returns one value per box. If it joins two
-                # values, retaining both is still preferable to discarding data.
-                for value in values:
-                    tokens.append(OCRToken(raw_text, value, confidence, box))
+                text_length = max(1, len(raw_text))
+                for value, start, end in matches:
+                    value_box = _horizontal_box_slice(
+                        box,
+                        start / text_length,
+                        end / text_length,
+                    )
+                    tokens.append(OCRToken(raw_text, value, confidence, value_box))
             else:
                 normalized = normalize_numeric_context(raw_text)
                 if normalized:
@@ -99,6 +103,33 @@ def _as_box(value: Any) -> BoundingBox:
     if len(points) != 4:
         raise ValueError(f"Expected four points in OCR bounding box, got {len(points)}")
     return points  # type: ignore[return-value]
+
+
+def _horizontal_box_slice(
+    box: BoundingBox,
+    start_ratio: float,
+    end_ratio: float,
+) -> BoundingBox:
+    """Approximate per-number boxes when OCR joins several values in one line."""
+
+    top_left, top_right, bottom_right, bottom_left = box
+
+    def interpolate(
+        start: tuple[float, float],
+        end: tuple[float, float],
+        ratio: float,
+    ) -> tuple[float, float]:
+        return (
+            start[0] + (end[0] - start[0]) * ratio,
+            start[1] + (end[1] - start[1]) * ratio,
+        )
+
+    return (
+        interpolate(top_left, top_right, start_ratio),
+        interpolate(top_left, top_right, end_ratio),
+        interpolate(bottom_left, bottom_right, end_ratio),
+        interpolate(bottom_left, bottom_right, start_ratio),
+    )
 
 
 def _iter_output(output: Any) -> Iterable[tuple[BoundingBox, str, float]]:

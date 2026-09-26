@@ -14,6 +14,7 @@ class LayoutResult:
     cells: list[list[str]]
     rows: list[list[OCRToken]]
     column_centers: list[float]
+    uncertain_rows: frozenset[int] = frozenset()
 
     @property
     def row_count(self) -> int:
@@ -22,6 +23,13 @@ class LayoutResult:
     @property
     def column_count(self) -> int:
         return max((len(row) for row in self.cells), default=0)
+
+
+@dataclass(frozen=True, slots=True)
+class _ColumnAnchor:
+    left: float
+    center: float
+    right: float
 
 
 def _cluster_rows(tokens: list[OCRToken]) -> list[list[OCRToken]]:
@@ -61,10 +69,19 @@ def _cluster_rows(tokens: list[OCRToken]) -> list[list[OCRToken]]:
     return groups
 
 
-def _assignment_cost(row: list[OCRToken], centers: list[float]) -> list[int]:
+def _token_column_cost(token: OCRToken, anchor: _ColumnAnchor) -> float:
+    """Support left-, center- and right-aligned numbers of different lengths."""
+    return min(
+        abs(token.left - anchor.left),
+        abs(token.center_x - anchor.center),
+        abs(token.right - anchor.right),
+    )
+
+
+def _assignment_cost(row: list[OCRToken], anchors: list[_ColumnAnchor]) -> list[int]:
     """Monotonically assign a sparse row to columns using dynamic programming."""
 
-    item_count, column_count = len(row), len(centers)
+    item_count, column_count = len(row), len(anchors)
     if item_count == 0:
         return []
     if item_count > column_count:
@@ -74,12 +91,14 @@ def _assignment_cost(row: list[OCRToken], centers: list[float]) -> list[int]:
     costs = [[infinity] * column_count for _ in range(item_count)]
     previous = [[-1] * column_count for _ in range(item_count)]
     for column in range(column_count):
-        costs[0][column] = abs(row[0].center_x - centers[column])
+        costs[0][column] = _token_column_cost(row[0], anchors[column])
 
     for item in range(1, item_count):
         for column in range(item, column_count):
             for prior in range(item - 1, column):
-                value = costs[item - 1][prior] + abs(row[item].center_x - centers[column])
+                value = costs[item - 1][prior] + _token_column_cost(
+                    row[item], anchors[column]
+                )
                 if value < costs[item][column]:
                     costs[item][column] = value
                     previous[item][column] = prior
@@ -99,31 +118,67 @@ def _detect_columns(rows: list[list[OCRToken]]) -> tuple[list[float], list[list[
 
     column_count = max(len(row) for row in rows)
     reference_candidates = [row for row in rows if len(row) == column_count]
-    reference = min(
-        reference_candidates,
-        key=lambda row: sum(token.width for token in row),
+    all_tokens = [token for row in rows for token in row]
+    typical_height = median(token.height for token in all_tokens)
+    typical_character_width = median(
+        token.width / max(1, len(token.normalized_text)) for token in all_tokens
     )
-    centers = [token.center_x for token in reference]
+    gap_scale = max(1.0, typical_height, typical_character_width)
+
+    def gap_score(row: list[OCRToken]) -> tuple[float, float, float]:
+        gaps = [
+            max(0.0, following.left - current.right) / gap_scale
+            for current, following in zip(row, row[1:], strict=False)
+        ]
+        if not gaps:
+            return (0.0, 0.0, -sum(token.width for token in row))
+        return (min(gaps), median(gaps), -sum(token.width for token in row))
+
+    reference = max(
+        reference_candidates,
+        key=gap_score,
+    )
+    anchors = [
+        _ColumnAnchor(token.left, token.center_x, token.right) for token in reference
+    ]
 
     assignments: list[list[int]] = []
     for _ in range(3):
-        assignments = [_assignment_cost(row, centers) for row in rows]
-        refined: list[float] = []
-        for column, fallback in enumerate(centers):
+        assignments = [_assignment_cost(row, anchors) for row in rows]
+        refined: list[_ColumnAnchor] = []
+        for column, fallback in enumerate(anchors):
             samples = [
-                row[item].center_x
+                row[item]
                 for row, mapping in zip(rows, assignments, strict=True)
                 for item, assigned in enumerate(mapping)
                 if assigned == column
             ]
-            refined.append(median(samples) if samples else fallback)
-        centers = refined
+            refined.append(
+                _ColumnAnchor(
+                    median(token.left for token in samples),
+                    median(token.center_x for token in samples),
+                    median(token.right for token in samples),
+                )
+                if samples
+                else fallback
+            )
+        anchors = refined
 
-    LOGGER.debug("Column clustering: centers=%s assignments=%s", centers, assignments)
+    centers = [anchor.center for anchor in anchors]
+    LOGGER.debug(
+        "Column clustering: scale=%s centers=%s assignments=%s",
+        gap_scale,
+        centers,
+        assignments,
+    )
     return centers, assignments
 
 
-def detect_layout(tokens: list[OCRToken], preserve_columns: bool = True) -> LayoutResult:
+def detect_layout(
+    tokens: list[OCRToken],
+    preserve_columns: bool = True,
+    auto_columns: bool = True,
+) -> LayoutResult:
     rows = _cluster_rows(tokens)
     if not rows:
         return LayoutResult([], [], [])
@@ -131,6 +186,14 @@ def detect_layout(tokens: list[OCRToken], preserve_columns: bool = True) -> Layo
     if not preserve_columns:
         return LayoutResult(
             [[token.normalized_text for token in row] for row in rows], rows, []
+        )
+
+    if not auto_columns:
+        single_column_rows = [[token] for row in rows for token in row]
+        return LayoutResult(
+            [[row[0].normalized_text] for row in single_column_rows],
+            single_column_rows,
+            [],
         )
 
     centers, assignments = _detect_columns(rows)

@@ -14,12 +14,50 @@ def test_main_window_has_pin_autostart_and_close_controls() -> None:
     window = MainWindow(Settings())
     assert window.title_bar.pin_button.toolTip() == "窗口置顶"
     assert window.start_with_windows.text() == "开机自启"
+    assert window.auto_columns.text() == "自动分列"
+    assert window.auto_columns.isChecked()
+    assert window.text_number_split.text() == "文数分列"
+    assert window.text_number_split.isChecked()
+    assert not window.preview.isReadOnly()
     assert window.toggle_hotkey_edit.keySequence().toString() == "Ctrl+Shift+Z"
     assert window.hotkey_save_button.text() == "保存"
     assert window.toggle_hotkey_save_button.text() == "保存"
     assert window.theme_combo.count() == 3
     assert window.close_button.text() == "关闭"
     assert window.testAttribute(Qt.WA_TranslucentBackground)
+    window.deleteLater()
+    app.processEvents()
+
+
+def test_right_option_column_is_vertically_aligned() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(Settings())
+    window.show()
+    app.processEvents()
+    assert window.auto_columns.geometry().x() == window.text_number_split.geometry().x()
+    window.deleteLater()
+    app.processEvents()
+
+
+def test_auto_columns_is_available_only_in_numbers_only_mode(monkeypatch) -> None:
+    monkeypatch.setattr(Settings, "save", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(Settings())
+    assert window.auto_columns.isEnabled()
+    window.numbers_only.setChecked(False)
+    assert not window.auto_columns.isEnabled()
+    window.deleteLater()
+    app.processEvents()
+
+
+def test_manual_preview_edit_is_used_as_result(monkeypatch) -> None:
+    monkeypatch.setattr(Settings, "save", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(Settings())
+    window.set_result("猪肋排\t8", frozenset({0}))
+    window.preview.setPlainText("猪肋排长切\t8")
+    assert window.result_text() == "猪肋排长切\t8"
+    assert window.preview.extraSelections() == []
     window.deleteLater()
     app.processEvents()
 

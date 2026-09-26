@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 from PySide6.QtGui import QImage
 
@@ -29,3 +29,18 @@ def test_engine_initialization_limits_native_thread_pools(monkeypatch) -> None:
     assert captured["EngineConfig.onnxruntime.intra_op_num_threads"] == 4
     assert captured["EngineConfig.onnxruntime.inter_op_num_threads"] == 1
 
+
+def test_joined_numbers_receive_separate_bounding_boxes(monkeypatch) -> None:
+    output = SimpleNamespace(
+        boxes=[[(0, 0), (140, 0), (140, 20), (0, 20)]],
+        txts=["123 456"],
+        scores=[0.99],
+    )
+    engine = ocr_engine.OCREngine()
+    engine._engine = lambda image: output
+    monkeypatch.setattr(ocr_engine, "_qimage_to_rgb_array", lambda image: object())
+
+    tokens = engine.recognize(QImage())
+
+    assert [token.normalized_text for token in tokens] == ["123", "456"]
+    assert tokens[0].right < tokens[1].left

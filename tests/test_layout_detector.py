@@ -1,3 +1,4 @@
+from numbersnap.core.formatter import to_tsv
 from numbersnap.core.layout_detector import detect_layout
 from numbersnap.core.models import OCRToken, rectangular_box
 
@@ -58,3 +59,60 @@ def test_can_disable_column_preservation() -> None:
     ]
     assert detect_layout(tokens, preserve_columns=False).cells == [["1", "2", "3"], ["4", "6"]]
 
+
+def test_auto_columns_creates_two_column_tsv() -> None:
+    tokens = [
+        token("123", 10, 10), token("456", 210, 10),
+        token("234", 10, 50), token("567", 210, 50),
+        token("345", 10, 90), token("678", 210, 90),
+    ]
+    result = detect_layout(tokens)
+    assert result.cells == [
+        ["123", "456"],
+        ["234", "567"],
+        ["345", "678"],
+    ]
+    assert to_tsv(result.cells) == "123\t456\n234\t567\n345\t678"
+
+
+def test_auto_columns_retains_missing_left_cell() -> None:
+    tokens = [
+        token("123", 10, 10), token("456", 210, 10),
+        token("567", 210, 50),
+        token("345", 10, 90), token("678", 210, 90),
+    ]
+    result = detect_layout(tokens)
+    assert result.cells == [
+        ["123", "456"],
+        ["", "567"],
+        ["345", "678"],
+    ]
+    assert to_tsv(result.cells) == "123\t456\n\t567\n345\t678"
+
+
+def test_auto_columns_handles_different_number_lengths() -> None:
+    tokens = [
+        token("12", 10, 10, 20), token("45678", 210, 10, 55),
+        token("1234", 10, 50, 44), token("56", 210, 50, 22),
+        token("123", 10, 90, 33), token("789", 210, 90, 33),
+    ]
+    result = detect_layout(tokens)
+    assert result.cells == [
+        ["12", "45678"],
+        ["1234", "56"],
+        ["123", "789"],
+    ]
+    assert to_tsv(result.cells) == "12\t45678\n1234\t56\n123\t789"
+
+
+def test_auto_columns_can_be_disabled_for_single_column_output() -> None:
+    tokens = [
+        token("1", 10, 10), token("2", 210, 10),
+        token("3", 10, 50), token("4", 210, 50),
+    ]
+    assert detect_layout(tokens, auto_columns=False).cells == [
+        ["1"],
+        ["2"],
+        ["3"],
+        ["4"],
+    ]

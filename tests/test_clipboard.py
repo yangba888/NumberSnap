@@ -14,3 +14,15 @@ def test_clipboard_only_exposes_plain_text() -> None:
     assert not mime.hasFormat("text/rtf")
     clear_clipboard()
     app.processEvents()
+
+
+def test_multicolumn_tsv_preserves_empty_cell_for_spreadsheet_paste() -> None:
+    app = QApplication.instance() or QApplication([])
+    value = "123\t456\n\t567\n345\t678"
+    copy_text(value)
+    mime = QGuiApplication.clipboard().mimeData()
+    assert mime.text() == value
+    assert not mime.hasHtml()
+    assert not mime.hasFormat("text/rtf")
+    clear_clipboard()
+    app.processEvents()

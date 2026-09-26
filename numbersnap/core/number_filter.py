@@ -18,8 +18,39 @@ _NUMBER = re.compile(
 def extract_numbers(text: str) -> list[str]:
     """Return numeric substrings without converting their representation."""
 
+    return [value for value, _, _ in extract_number_spans(text)]
+
+
+def extract_number_spans(text: str) -> list[tuple[str, int, int]]:
+    """Return each numeric value and its character range in the OCR text."""
+
+    raw_matches = list(_NUMBER.finditer(text))
+    if len(raw_matches) > 1:
+        return [
+            (normalize_numeric_context(match.group(0)), match.start(), match.end())
+            for match in raw_matches
+        ]
+
     normalized = normalize_numeric_context(text)
-    return [match.group(0) for match in _NUMBER.finditer(normalized)]
+    if _NUMBER.fullmatch(normalized):
+        start = len(text) - len(text.lstrip())
+        end = len(text.rstrip())
+        return [(normalized, start, end)]
+    if raw_matches:
+        match = raw_matches[0]
+        return [
+            (
+                normalize_numeric_context(match.group(0)),
+                match.start(),
+                match.end(),
+            )
+        ]
+
+    start_offset = len(text) - len(text.lstrip())
+    return [
+        (match.group(0), start_offset + match.start(), start_offset + match.end())
+        for match in _NUMBER.finditer(normalized)
+    ]
 
 
 def is_number(text: str) -> bool:
