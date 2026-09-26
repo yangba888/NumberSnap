@@ -23,7 +23,7 @@ def configure_logging(debug: bool) -> None:
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("NumberSnap")
-    app.setApplicationVersion("0.1.7")
+    app.setApplicationVersion("0.1.8")
     app.setQuitOnLastWindowClosed(False)
 
     if "--uninstall-cleanup" in sys.argv:

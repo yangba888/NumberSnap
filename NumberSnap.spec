@@ -37,6 +37,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    icon="assets/numbersnap-exe-icon.ico",
 )
 coll = COLLECT(
     exe,
