@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle("NumberSnap")
-        self.setMinimumSize(520, 440)
+        self.setMinimumSize(360, 440)
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         # Keep the body opaque while allowing the custom title bar to use
         # per-pixel alpha. This is lighter and more reliable than a live blur.
@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         self.capture_button = QPushButton("截图识别")
         self.copy_button = QPushButton("重新复制")
         self.clear_button = QPushButton("清除")
-        self.close_button = QPushButton("关闭")
+        self.close_button = QPushButton("退出")
         self.copy_button.setEnabled(False)
         self.clear_button.setEnabled(False)
         buttons.addWidget(self.capture_button)
@@ -291,6 +291,28 @@ class MainWindow(QMainWindow):
             """
         )
         self.title_bar.set_dark_mode(dark)
+
+    def nativeEvent(self, event_type, message):  # type: ignore[no-untyped-def]
+        if sys.platform == "win32" and not self.isMaximized() and not self.isFullScreen():
+            msg = wintypes.MSG.from_address(int(message))
+            if msg.message == 0x0084:  # WM_NCHITTEST, coordinates are physical pixels.
+                rect = wintypes.RECT()
+                if ctypes.windll.user32.GetWindowRect(wintypes.HWND(msg.hWnd), ctypes.byref(rect)):
+                    x = ctypes.c_short(msg.lParam & 0xFFFF).value
+                    y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
+                    border = round(6 * self.devicePixelRatioF())
+                    if rect.left <= x < rect.right and rect.top <= y < rect.bottom:
+                        left = x < rect.left + border
+                        right = x >= rect.right - border
+                        top = y < rect.top + border
+                        bottom = y >= rect.bottom - border
+                        if top:
+                            return True, 13 if left else 14 if right else 12
+                        if bottom:
+                            return True, 16 if left else 17 if right else 15
+                        if left or right:
+                            return True, 10 if left else 11
+        return super().nativeEvent(event_type, message)
 
     def showEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().showEvent(event)

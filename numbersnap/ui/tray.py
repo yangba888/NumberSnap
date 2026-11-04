@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 
-def create_app_icon() -> QIcon:
-    pixmap = QPixmap(64, 64)
+def create_app_icon(size: int = 64) -> QIcon:
+    pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
+    painter.scale(size / 64, size / 64)
     painter.setRenderHint(QPainter.Antialiasing)
-    painter.setBrush(QColor("#1677ff"))
+    painter.setBrush(QColor("#35B2C0"))
     painter.setPen(Qt.NoPen)
     painter.drawRoundedRect(4, 4, 56, 56, 13, 13)
     painter.setPen(Qt.white)
     font = QFont("Segoe UI", 28, QFont.Bold)
     painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignCenter, "N")
+    painter.drawText(QRect(0, 0, 64, 64), Qt.AlignCenter, "N")
     painter.end()
     return QIcon(pixmap)
 

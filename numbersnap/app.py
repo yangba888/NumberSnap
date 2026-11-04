@@ -12,15 +12,15 @@ from numbersnap.core.autostart import is_autostart_enabled, reconcile_autostart,
 from numbersnap.core.capture import DesktopSnapshot, capture_virtual_desktop
 from numbersnap.core.clipboard import clear_clipboard, copy_text
 from numbersnap.core.hotkey import TOGGLE_WINDOW_HOTKEY_ID, GlobalHotkey
-from numbersnap.core.layout_detector import LayoutResult
 from numbersnap.ui.main_window import MainWindow
 from numbersnap.ui.notification import NotificationService
 from numbersnap.ui.screenshot_overlay import ScreenshotOverlay
-from numbersnap.ui.tray import TrayIcon, create_app_icon
+from numbersnap.ui.tray import TrayIcon
 
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from numbersnap.core.layout_detector import LayoutResult
     from numbersnap.core.worker import OCRWorker
 
 
@@ -40,7 +40,7 @@ class ApplicationController(QObject):
         self.window = MainWindow(settings)
         self.window.set_autostart_checked(autostart_enabled)
         self.tray = TrayIcon()
-        self.notifications = NotificationService(self.tray)
+        self.notifications = NotificationService(self.tray, self.show_window)
         self.hotkey = GlobalHotkey(settings.hotkey)
         self.toggle_hotkey = GlobalHotkey(
             settings.toggle_hotkey,
@@ -48,7 +48,6 @@ class ApplicationController(QObject):
         )
         self.overlay: ScreenshotOverlay | None = None
         self.snapshot: DesktopSnapshot | None = None
-        self.last_text = ""
         self._ocr_busy = False
         self.worker_thread: QThread | None = None
         self.worker: OCRWorker | None = None
@@ -71,7 +70,7 @@ class ApplicationController(QObject):
             lambda message: self.notifications.show(message, error=True)
         )
 
-        self.app.setWindowIcon(create_app_icon())
+        self.app.setWindowIcon(self.tray.icon())
         self.app.aboutToQuit.connect(self._shutdown)
 
     def start(self, show_window: bool = True) -> None:
@@ -113,6 +112,7 @@ class ApplicationController(QObject):
             self.overlay.cancelled.connect(self._clear_overlay)
             self.overlay.show()
         except Exception as exc:
+            self._clear_overlay()
             LOGGER.exception("Unable to start screen capture")
             self.notifications.show(f"无法开始截图：{exc}", error=True)
 
@@ -121,9 +121,16 @@ class ApplicationController(QObject):
         if self.snapshot is None:
             self._clear_overlay()
             return
-        image = self.snapshot.crop(rect)
-        self._clear_overlay()
-        self._ensure_worker()
+        try:
+            try:
+                image = self.snapshot.crop(rect)
+            finally:
+                self._clear_overlay()
+            self._ensure_worker()
+        except Exception as exc:
+            LOGGER.exception("Unable to prepare OCR")
+            self._on_failed(str(exc))
+            return
         self._ocr_busy = True
         self.window.set_busy(True)
         self.recognize_requested.emit(
@@ -137,6 +144,7 @@ class ApplicationController(QObject):
     @Slot()
     def _clear_overlay(self) -> None:
         if self.overlay is not None:
+            self.overlay.hide()
             self.overlay.release_snapshot()
             self.overlay.deleteLater()
         self.overlay = None
@@ -146,7 +154,6 @@ class ApplicationController(QObject):
     def _on_completed(self, result: LayoutResult, text: str, elapsed: float) -> None:
         self._ocr_busy = False
         self.window.set_busy(False)
-        self.last_text = text
         self.window.set_result(text, result.uncertain_rows)
         if not text:
             self.notifications.show("未识别到数字", error=True)
@@ -178,13 +185,11 @@ class ApplicationController(QObject):
     def copy_again(self) -> None:
         text = self.window.result_text()
         if text:
-            self.last_text = text
             copy_text(text)
             self.notifications.show("识别结果已重新复制")
 
     @Slot()
     def clear_result(self) -> None:
-        self.last_text = ""
         self.window.set_result("")
         clear_clipboard()
         self.notifications.show("识别结果和剪贴板已清除")

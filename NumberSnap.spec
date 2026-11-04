@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 rapidocr_hidden = ["rapidocr.inference_engine.onnxruntime"]
@@ -24,6 +25,11 @@ a = Analysis(
     ],
     noarchive=False,
 )
+# Screenshots use OpenCV image operations only, never video capture or playback.
+a.binaries = [
+    entry for entry in a.binaries
+    if not Path(entry[0]).name.lower().startswith("opencv_videoio_ffmpeg")
+]
 pyz = PYZ(a.pure)
 
 exe = EXE(

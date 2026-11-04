@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 type Point = tuple[float, float]
 type BoundingBox = tuple[Point, Point, Point, Point]
@@ -46,10 +46,6 @@ class OCRToken:
     @property
     def center_y(self) -> float:
         return (self.top + self.bottom) / 2.0
-
-    def with_text(self, normalized_text: str) -> OCRToken:
-        return replace(self, normalized_text=normalized_text)
-
 
 def rectangular_box(x: float, y: float, width: float, height: float) -> BoundingBox:
     return ((x, y), (x + width, y), (x + width, y + height), (x, y + height))
